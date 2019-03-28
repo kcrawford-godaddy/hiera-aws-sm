@@ -94,6 +94,9 @@ Puppet::Functions.create_function(:hiera_aws_sm) do
   # it is returned directly. If secret_string is set, and can be co-erced
   # into a Hash, it is returned, otherwise a String is returned.
   def get_secret(key, options, context)
+    # AWS SM doesn't support colons in secret paths, replace them with underscores
+    key = key.gsub(/::/, '_')
+
     client_opts = {}
     client_opts[:access_key_id] = options['aws_access_key'] if options.key?('aws_access_key')
     client_opts[:secret_access_key] = options['aws_secret_key'] if options.key?('aws_secret_key')
