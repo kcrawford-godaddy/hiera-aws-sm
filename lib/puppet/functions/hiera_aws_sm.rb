@@ -134,22 +134,16 @@ Puppet::Functions.create_function(:hiera_aws_sm) do
   end
 
   ##
-  # Get the secret name to lookup, applying a prefix if
-  # one is set in the options
-  def secret_key_name(key, options)
-    if options.key?('prefix')
-      [options.prefix, key].join('/')
-    else
-      key
-    end
-  end
-
-  ##
   # Process the response secret string by attempting to coerce it
   def process_secret_string(secret_string, _options, context)
     # Attempt to process this string as a JSON object
     begin
       result = JSON.parse(secret_string)
+
+      if (result.has_key?('value') && result.length == 1)
+        result = result['value']
+      end
+
     rescue JSON::ParserError
       context.explain { '[hiera-aws-sm] Not a hashable result' }
       result = secret_string
