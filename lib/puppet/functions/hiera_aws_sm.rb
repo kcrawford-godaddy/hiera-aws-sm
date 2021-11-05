@@ -122,7 +122,7 @@ Puppet::Functions.create_function(:hiera_aws_sm) do
 
     client_opts[:role_arn] = options['aws_role_arn'] if options.key('aws_role_arn')
     client_opts[:role_session_name] = options['aws_role_session_name'] if options.key('aws_role_session_name')
-    client_opts[:role_duration_s] = options['aws_role_duration_seconds'] if options.key('aws_role_duration_seconds')
+    client_opts[:role_duration_seconds] = options['aws_role_duration_seconds'] if options.key('aws_role_duration_seconds')
 
     if client_opts.include?(:role_arn)
       sts = Aws::STS::Client.new(
@@ -135,7 +135,7 @@ Puppet::Functions.create_function(:hiera_aws_sm) do
       role_credentials = Aws::AssumeRoleCredentials.new(
         client: sts,
         role_arn: client_opts[:role_arn],
-        role_session_name: client_opts[:role_session_name] | default_session_name,
+        role_session_name: client_opts[:role_session_name] || default_session_name,
         duration: client_opts[:role_duration_seconds] || 3600
       )
       secretsmanager = Aws::SecretsManager::Client.new(
