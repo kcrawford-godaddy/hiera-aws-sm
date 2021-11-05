@@ -46,6 +46,12 @@ hierarchy:
       continue_if_not_found: false
       aws_access_key: <aws_access_key>
       aws_secret_key: <aws_secret_key>
+      aws_role_arn: <aws_role_arn>
+      aws_role_session_name: <aws_role_session_name>
+      aws_role_duration_seconds: <aws_role_duration_seconds>
+      warm_caches:
+        - <key-1>
+        - <key-n>
       region: us-east-1
       delimiter: /
       prefixes: 
@@ -75,6 +81,19 @@ within AWS should have their access to SecretsManager granted via IAM
 roles.
 
 `aws_secret_key`: IAM secret access key to be used to connect to AWS. 
+
+`aws_role_arn`: For leveraging the STS assume role feature, provide a full role ARN here.
+
+`aws_role_session_name`: For leveraging the STS assume role feature, provide a role
+session name here. default: "puppet".
+
+`aws_role_duration_seconds`: For leveraging the STS assume role feature, provide a time
+limit, in seconds, for assuming role. default: 3600.
+
+` warm_caches`: If you prefer to load JSON secrets sets, and want the power of puppet
+lookup context cache, any keys you provide here will load the JSON key-values defined
+for the those keys (secret ID). This has the added benefit of fewer calls to the
+AWS secrets manager API if you have many individual secrets
 
 `region`: AWS region to query against
 

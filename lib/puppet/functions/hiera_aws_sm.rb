@@ -63,6 +63,17 @@ Puppet::Functions.create_function(:hiera_aws_sm) do
       keys = [key]
     end
 
+    cache_is_warmed = context.cache_has_key('cache_loaded')
+
+    if !cache_is_warmed
+      if warm_caches = options['warm_caches']
+        raise ArgumentError, '[hiera-aws-sm] warm_caches must be an array' unless warm_caches.is_a?(Array)
+        warm_caches.each do |cache|
+          get_secret(cache, options, context)
+        end
+      end
+    end
+
     # Query SecretsManager for the secret data, stopping once we find a match
     result = nil
     keys.each do |secret_key|
@@ -97,12 +108,43 @@ Puppet::Functions.create_function(:hiera_aws_sm) do
     # AWS SM doesn't support colons in secret paths, replace them with periods
     key = key.gsub(/::/, '.')
 
+    if context.cache_has_key(key)
+      context.explain { '[hiera-aws-sm] found key in cache' }
+      context.cached_value(key)
+    end
+
     client_opts = {}
     client_opts[:access_key_id] = options['aws_access_key'] if options.key?('aws_access_key')
     client_opts[:secret_access_key] = options['aws_secret_key'] if options.key?('aws_secret_key')
     client_opts[:region] = options['region'] if options.key?('region')
 
-    secretsmanager = Aws::SecretsManager::Client.new(client_opts)
+    basic_opts = client_opts
+
+    client_opts[:role_arn] = options['aws_role_arn'] if options.key('aws_role_arn')
+    client_opts[:role_session_name] = options['aws_role_session_name'] if options.key('aws_role_session_name')
+    client_opts[:role_duration_s] = options['aws_role_duration_seconds'] if options.key('aws_role_duration_seconds')
+
+    if client_opts.include?(:role_arn)
+      sts = Aws::STS::Client.new(
+        region: client_opts[:region],
+        access_key_id: client_opts[:access_key_id],
+        secret_access_key: client_opts[:secret_access_key]
+      )
+      time = Time.new
+      default_session_name = "puppet-#{time.year}-#{time.month}-#{time.day}-#{time.hour}"
+      role_credentials = Aws::AssumeRoleCredentials.new(
+        client: sts,
+        role_arn: client_opts[:role_arn],
+        role_session_name: client_opts[:role_session_name] | default_session_name,
+        duration: client_opts[:role_duration_seconds] || 3600
+      )
+      secretsmanager = Aws::SecretsManager::Client.new(
+        region: client_opts[:region],
+        credentials: role_credentials
+      )
+    else
+      secretsmanager = Aws::SecretsManager::Client.new(basic_opts)
+    end
 
     response = nil
     secret = nil
@@ -110,10 +152,10 @@ Puppet::Functions.create_function(:hiera_aws_sm) do
     context.explain { "[hiera-aws-sm] Looking up #{key}" }
     begin
       response = secretsmanager.get_secret_value(secret_id: key)
-    rescue Aws::SecretsManager::Errors::ResourceNotFoundException
-      context.explain { "[hiera-aws-sm] No data found for #{key}" }
-    rescue Aws::SecretsManager::Errors::UnrecognizedClientException
-      raise Puppet::DataBinding::LookupError, "[hiera-aws-sm] Skipping backend. No permission to access #{key}"
+    rescue Aws::SecretsManager::Errors::ResourceNotFoundException => e
+      context.explain { "[hiera-aws-sm] No data found for #{key}: #{e.message}" }
+    rescue Aws::SecretsManager::Errors::UnrecognizedClientException => e
+      raise Puppet::DataBinding::LookupError, "[hiera-aws-sm] Skipping backend. No permission to access #{key}: #{e.message}"
     rescue Aws::SecretsManager::Errors::ServiceError => e
       raise Puppet::DataBinding::LookupError, "[hiera-aws-sm] Skipping backend. Failed to lookup #{key} due to #{e.message}"
     end
@@ -139,9 +181,18 @@ Puppet::Functions.create_function(:hiera_aws_sm) do
     # Attempt to process this string as a JSON object
     begin
       result = JSON.parse(secret_string)
-
-      if (result.has_key?('value') && result.length == 1)
-        result = result['value']
+      if result.is_a?(Hash) && _options.key?('warm_caches') && _options.fetch('warm_caches').count > 0
+        context.explain { '[hiera-aws-sm] caching hashed data' }
+        result.each_key do |k|
+          val = result.fetch(k)
+          if val.is_a?(String) && val.start_with?('-----BEGIN')
+            val = val.gsub('\n', "\n")
+          end
+          context.cache(k, val)
+        end
+        if !context.cache_has_key('cache_loaded')
+          context.cache('cache_loaded', true)
+        end
       end
 
     rescue JSON::ParserError
