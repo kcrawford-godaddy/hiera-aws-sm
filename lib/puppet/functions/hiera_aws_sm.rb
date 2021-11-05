@@ -110,7 +110,7 @@ Puppet::Functions.create_function(:hiera_aws_sm) do
 
     if context.cache_has_key(key)
       context.explain { '[hiera-aws-sm] found key in cache' }
-      context.cached_value(key)
+      return context.cached_value(key)
     end
 
     client_opts = {}
