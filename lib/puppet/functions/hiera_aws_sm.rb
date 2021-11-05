@@ -110,7 +110,7 @@ Puppet::Functions.create_function(:hiera_aws_sm) do
 
     if context.cache_has_key(key)
       context.explain { '[hiera-aws-sm] found key in cache' }
-      context.cached_value(key)
+      return context.cached_value(key)
     end
 
     client_opts = {}
@@ -120,9 +120,9 @@ Puppet::Functions.create_function(:hiera_aws_sm) do
 
     basic_opts = client_opts
 
-    client_opts[:role_arn] = options['aws_role_arn'] if options.key('aws_role_arn')
-    client_opts[:role_session_name] = options['aws_role_session_name'] if options.key('aws_role_session_name')
-    client_opts[:role_duration_seconds] = options['aws_role_duration_seconds'] if options.key('aws_role_duration_seconds')
+    client_opts[:role_arn] = options['aws_role_arn'] if options.key?('aws_role_arn')
+    client_opts[:role_session_name] = options['aws_role_session_name'] if options.key?('aws_role_session_name')
+    client_opts[:role_duration_seconds] = options['aws_role_duration_seconds'] if options.key?('aws_role_duration_seconds')
 
     if client_opts.include?(:role_arn)
       sts = Aws::STS::Client.new(
